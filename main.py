@@ -2,6 +2,8 @@ from bs4 import BeautifulSoup
 import grequests
 import time
 from fp.fp import FreeProxy
+import itertools
+import csv
 
 #start_time = time.time()
 
@@ -20,29 +22,41 @@ links = [
 
 
 def exception_handler(request, exception):
-    print(f"Request failed. {request}")
+    print(f"Request failed. Url: {request.url}. Exception: {exception}")
 
 
-for ks in range(0, len(links), 1000):
-    print(f"ks = {ks}")
-    proxy = FreeProxy(anonym=True).get()
-    print(proxy)
+proxy_file = open("proxy_list.txt", encoding="utf-8-sig")
+proxy_lines = proxy_file.read().splitlines()
 
-    reqs = (grequests.get("https://ostrov.ru/rooms/" + link,
-                          proxies={'http': proxy},
-                          headers={'x-my-proxy': ' '.join(proxy)}) for link in links)
-    resp = grequests.imap(reqs, grequests.Pool(10), exception_handler=exception_handler)
+hotel_code_file = open("map_list.txt", encoding="utf-8-sig")
+hotel_code_rows = hotel_code_file.read().splitlines()
 
-    for i in range(1000):
-        soup = BeautifulSoup(resp[i + ks].text, 'lxml')
-        rating_img_tag = soup.find_all('img', attrs={"class": 'zen-tripadvisor-rating-main'})
-        hotel_url_tag = soup.find_all('link', attrs={"rel": 'canonical'})
-        hotel_url_text = hotel_url_tag[0]['href'].split("/")
-        hotel_code_text = hotel_url_text[-1] if hotel_url_text[-1] else hotel_url_text[-2]
+proxies = []
+for host in proxy_lines:
+    proxies.append(dict(http='socks5://' + host, https='socks5://' + host))
 
-        try:
-            print("\"" + hotel_code_text + "\"; " + rating_img_tag[0]['alt'])
-        except:
-            print("\"" + hotel_code_text + "\"; null")
+reqs = []
+for hotel_code_row, proxy in zip(hotel_code_rows, proxies):
+    hotel_code_bytes = hotel_code_row.encode()
+    hotel_code = hotel_code_bytes.decode()
+    url = "https://ostrovok.ru/rooms/" + hotel_code
+    #reqs.append(grequests.get(url, proxies=proxy))
+    reqs.append(grequests.get(url))
+
+resps = grequests.imap(reqs, grequests.Pool(10), exception_handler=exception_handler)
+
+
+for resp in resps:
+    soup = BeautifulSoup(resp.text, 'lxml')
+    rating_img_tag = soup.find_all('img', attrs={"class": 'zen-tripadvisor-rating-main'})
+    hotel_url_tag = soup.find_all('link', attrs={"rel": 'canonical'})
+    hotel_url_text = hotel_url_tag[0]['href'].split("/")
+    hotel_code_text = hotel_url_text[-1] if hotel_url_text[-1] else hotel_url_text[-2]
+
+    try:
+        print("\"" + hotel_code_text + "\"; " + rating_img_tag[0]['alt'])
+    except:
+        print("\"" + hotel_code_text + "\"; null")
+
 
 #print("--- %s seconds ---" % (time.time() - start_time))
