@@ -27,6 +27,14 @@ def exception_handler(request, exception):
     print(f"Request failed. Url: {request.url}.\nException: {exception}")
 
 
+def write_down_results(results):
+    separator = "\n"
+    results_string = separator.join(results) + "\n"
+    with open("code_with_rating_async.txt", "a", encoding='utf-8') as file:
+        file.write(results_string)
+    results.clear()
+
+
 hotel_code_file = open("map_list.txt", encoding="utf-8-sig")
 hotel_code_rows = hotel_code_file.read().splitlines()
 
@@ -50,7 +58,13 @@ for hotel_code_row, proxy in zip(hotel_code_rows, proxies):
 
 resps = grequests.imap(reqs, grequests.Pool(10), exception_handler=exception_handler)
 
+results = []
+count = 0
 for resp in resps:
+    if count == 3:
+        write_down_results(results)
+        count = 0
+
     soup = BeautifulSoup(resp.text, 'lxml')
     rating_img_tag = soup.find_all('img', attrs={"class": 'zen-tripadvisor-rating-main'})
     hotel_url_tag = soup.find_all('link', attrs={"rel": 'canonical'})
@@ -58,9 +72,18 @@ for resp in resps:
     hotel_code_text = hotel_url_text[-1] if hotel_url_text[-1] else hotel_url_text[-2]
 
     try:
-        print("\"" + hotel_code_text + "\"; " + rating_img_tag[0]['alt'])
+        result_element = "\"" + hotel_code_text + "\"; " + rating_img_tag[0]['alt']
+        print(result_element)
+        results.append(result_element)
     except:
-        print("\"" + hotel_code_text + "\"; null")
+        result_element = "\"" + hotel_code_text + "\"; null"
+        print(result_element)
+        results.append(result_element)
 
+    count += 1
+
+if count > 0:
+    write_down_results(results)
+    count = 0
 
 #print("--- %s seconds ---" % (time.time() - start_time))
