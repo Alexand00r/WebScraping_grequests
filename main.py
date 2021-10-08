@@ -1,3 +1,5 @@
+import math
+
 from bs4 import BeautifulSoup
 import grequests
 import time
@@ -22,18 +24,21 @@ links = [
 
 
 def exception_handler(request, exception):
-    print(f"Request failed. Url: {request.url}. Exception: {exception}")
+    print(f"Request failed. Url: {request.url}.\nException: {exception}")
 
-
-proxy_file = open("proxy_list.txt", encoding="utf-8-sig")
-proxy_lines = proxy_file.read().splitlines()
 
 hotel_code_file = open("map_list.txt", encoding="utf-8-sig")
 hotel_code_rows = hotel_code_file.read().splitlines()
 
+proxy_file = open("proxy_list.txt", encoding="utf-8-sig")
+proxy_lines = proxy_file.read().splitlines()
+if len(hotel_code_rows) > len(proxy_lines):
+    multiply = math.ceil(len(hotel_code_rows)/len(proxy_lines))
+    proxy_lines *= multiply
+
 proxies = []
 for host in proxy_lines:
-    proxies.append(dict(http='socks5://' + host, https='socks5://' + host))
+    proxies.append(dict(http='http://' + host, https='https://' + host))
 
 reqs = []
 for hotel_code_row, proxy in zip(hotel_code_rows, proxies):
@@ -44,7 +49,6 @@ for hotel_code_row, proxy in zip(hotel_code_rows, proxies):
     reqs.append(grequests.get(url))
 
 resps = grequests.imap(reqs, grequests.Pool(10), exception_handler=exception_handler)
-
 
 for resp in resps:
     soup = BeautifulSoup(resp.text, 'lxml')
