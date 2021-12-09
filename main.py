@@ -1,9 +1,11 @@
+import gevent.monkey
 import math
 
+import aiohttp
+import asyncio
 from bs4 import BeautifulSoup
 import grequests
 import time
-from fp.fp import FreeProxy
 import itertools
 import csv
 
@@ -48,42 +50,16 @@ proxies = []
 for host in proxy_lines:
     proxies.append(dict(http='http://' + host, https='https://' + host))
 
-reqs = []
-for hotel_code_row, proxy in zip(hotel_code_rows, proxies):
-    hotel_code_bytes = hotel_code_row.encode()
-    hotel_code = hotel_code_bytes.decode()
-    url = "https://ostrovok.ru/rooms/" + hotel_code
-    #reqs.append(grequests.get(url, proxies=proxy))
-    reqs.append(grequests.get(url))
 
-resps = grequests.imap(reqs, grequests.Pool(10), exception_handler=exception_handler)
+async def run():
+    async with aiohttp.ClientSession(trust_env=True) as session:
+        async with session.get("https://yandex.ru/") as resp:
+            print(BeautifulSoup(await resp.content, 'html.parser'))
 
-results = []
-count = 0
-for resp in resps:
-    if count == 3:
-        write_down_results(results)
-        count = 0
+loop = asyncio.get_event_loop()
 
-    soup = BeautifulSoup(resp.text, 'lxml')
-    rating_img_tag = soup.find_all('img', attrs={"class": 'zen-tripadvisor-rating-main'})
-    hotel_url_tag = soup.find_all('link', attrs={"rel": 'canonical'})
-    hotel_url_text = hotel_url_tag[0]['href'].split("/")
-    hotel_code_text = hotel_url_text[-1] if hotel_url_text[-1] else hotel_url_text[-2]
+future = asyncio.ensure_future(run())
+loop.run_until_complete(future)
 
-    try:
-        result_element = "\"" + hotel_code_text + "\"; " + rating_img_tag[0]['alt']
-        print(result_element)
-        results.append(result_element)
-    except:
-        result_element = "\"" + hotel_code_text + "\"; null"
-        print(result_element)
-        results.append(result_element)
-
-    count += 1
-
-if count > 0:
-    write_down_results(results)
-    count = 0
 
 #print("--- %s seconds ---" % (time.time() - start_time))
